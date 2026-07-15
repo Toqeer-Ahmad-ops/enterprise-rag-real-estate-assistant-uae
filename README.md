@@ -72,12 +72,6 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **n8n
 
 # 📸 Screenshots
 
-## Workflow Overview
-
-![Workflow Overview](docs/screenshots/workflow-overview.png)
-
----
-
 ## Document Ingestion Pipeline
 
 ![Ingestion Pipeline](docs/screenshots/ingestion-workflow.png)
@@ -111,22 +105,6 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **n8n
 ### RAG Logs
 
 ![RAG Logs](docs/screenshots/rag-logs.png)
-
----
-
-## Example Responses
-
-### Payment Plan Question
-
-![Payment Plan](docs/screenshots/payment-response.png)
-
-### Community Rules Question
-
-![Rules Response](docs/screenshots/rules-response.png)
-
-### Arabic Retrieval
-
-![Arabic Retrieval](docs/screenshots/arabic-response.png)
 
 ---
 
@@ -363,18 +341,10 @@ enterprise-real-estate-rag-api
 │   ├── ingestion.json
 │   └── retrieval.json
 │
-├── sql
-│   ├── documents.sql
-│   ├── match_documents.sql
-│   └── rag_logs_realestate.sql
-│
-├── postman
-│   └── collection.json
 │
 ├── docs
 │   ├── architecture.png
 │   ├── screenshots
-│   └── workflow.png
 │
 ├── README.md
 └── LICENSE
@@ -461,7 +431,3 @@ Open to opportunities as:
 - AI Workflow Consultant
 
 **Location:** Dubai • UAE • On-Site • Remote
-
-## 📜 License
-
-This project is released under the MIT License.
