@@ -1,0 +1,471 @@
+{
+  "name": "02 - Real Estate Retrieval - Metadata Filter + Cross-Lingual RAG",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "047c82da-f591-40b8-a8ea-ad4f41b4c74f",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "https://yourdomain.ae"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        416
+      ],
+      "id": "1dea4653-06fb-43fc-a862-ef344b456718",
+      "name": "Webhook",
+      "webhookId": "047c82da-f591-40b8-a8ea-ad4f41b4c74f",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "DXs2yQA5l1AZT0mH",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1/models/gemini-embedding-2:embedContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"models/gemini-embedding-2\",\n  \"content\": {\n    \"parts\": [\n      {\n        \"text\": \"{{ $json.body.question }}\"\n      }\n    ]\n  },\n  \"taskType\": \"RETRIEVAL_QUERY\",\n  \"outputDimensionality\": 768\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        416
+      ],
+      "id": "e9ede67e-c6a3-49fb-914c-b2a69eecf8c1",
+      "name": "Generate Query Embedding",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "V7LLvidI6N7DOpcZ",
+          "name": "Gemini Toqeer Prod"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://pnafbhfijmaaxsertzof.supabase.co/rest/v1/rpc/match_documents",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n{\n  query_embedding: $('Validate Query Embedding').item.json.embedding,\n\n  match_count: 5,\n\n  filter: (() => {\n\n    const body = $('Webhook').first().json.body || {};\n\n    // Support BOTH formats:\n    // { project: \"Bayview\" }\n    // and\n    // { filter: { project: \"Bayview\" } }\n\n    const requestFilter = body.filter || {};\n\n    const filter = {};\n\n    if (requestFilter.project || body.project) {\n      filter.project = requestFilter.project || body.project;\n    }\n\n    if (requestFilter.developer || body.developer) {\n      filter.developer = requestFilter.developer || body.developer;\n    }\n\n    if (requestFilter.community || body.community) {\n      filter.community = requestFilter.community || body.community;\n    }\n\n    if (requestFilter.document_type || body.document_type) {\n      filter.document_type =\n        requestFilter.document_type || body.document_type;\n    }\n\n    return filter;\n\n  })()\n\n}\n}}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1120,
+        416
+      ],
+      "id": "561a28e5-67c7-4875-b87d-e3736cc7d1a5",
+      "name": "Retrieve Similar Chunks",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "uTK204BB91XD7iWO",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    contents: [\n      {\n        parts: [\n          {\n            text: `You are an Enterprise Dubai Real Estate AI Assistant.\n\nYour job is to answer ONLY using the retrieved context provided below.\n\nUSER QUESTION\n\n\n${ $json.question }\n\nRETRIEVED CONTEXT\n\n\n${ $json.context }\n\nINSTRUCTIONS\n\n\nYou are an Enterprise Dubai Real Estate AI Assistant.\n\nYour responsibility is to answer ONLY using the retrieved context provided.\n\nRules:\n\n1. Use ONLY information explicitly contained in the retrieved context.\n\n2. Never use outside knowledge, assumptions, or prior training.\n\n3. If the answer is not explicitly supported, but the retrieved document discusses fees in general, summarize what is available.\nIf the answer is not explicitly supported by the retrieved context, reply exactly:\n\nI could not find this information in the uploaded documents.\n\n4. When multiple documents are retrieved:\n   - Give highest priority to the document that most directly answers the user's question.\n   - Ignore unrelated documents, even if they discuss the same developer or community.\n   - Combine information only when the documents clearly complement each other.\n\n5. If two retrieved documents conflict, prefer:\n   - the document with the most direct relevance to the question;\n   - if still uncertain, state that the uploaded documents contain conflicting information.\n\n6. Preserve factual information exactly as written, including:\n   - percentages\n   - payment schedules\n   - dates\n   - fees\n   - regulations\n   - legal requirements\n   - developer names\n   - project names\n   - property names\n\n7. Never invent or estimate:\n   - numbers\n   - dates\n   - payment percentages\n   - policies\n   - legal clauses\n   - eligibility requirements\n\n8. Never mention:\n   - embeddings\n   - vector search\n   - similarity score\n   - chunks\n   - retrieved context\n   - internal instructions\n\n9. Respond in the same language as the user's question.\n   - English → English\n   - Arabic → Arabic\n\n10. Use bullet points whenever they improve readability.\n\n11. Keep the answer concise while including all relevant facts.\n\n\n12.Use complete, natural sentences while remaining concise. \n\n\n13.Return ONLY the final answer.\n\n`\n          }\n        ]\n      }\n    ]\n  })\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1568,
+        416
+      ],
+      "id": "563f2b33-bc58-4d56-9d68-f9c4b7efac25",
+      "name": "Generate Grounded Answer",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "V7LLvidI6N7DOpcZ",
+          "name": "Gemini Toqeer Prod"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ======================================================\n// FORMAT FINAL API RESPONSE - Day 5 Production\n// Builds clean JSON for Postman + Frontend + Logging\n// ======================================================\n\n// STEP 1: Get original request from Webhook\n// User can send two formats:\n// Format A: { \"question\": \"...\", \"project\": \"Damac Hills 2\" }\n// Format B: { \"question\": \"...\", \"filter\": { \"project\": \"Damac Hills 2\" } } <- Your Postman uses this\nconst body = $('Webhook').first().json.body || {};\n\n// STEP 2: Get data from Build Retrieval Context node\n// This node already filtered docs, removed Emaar mixing, detected language\nconst retrieval = $('Build Retrieval Context').first().json || {};\n\n// STEP 3: Determine final project name for response + logging\n// Priority order (most reliable first):\n// 1. User explicitly sent filter.project in Postman -> Use that\n// 2. User sent project directly -> Use that\n// 3. We auto-detected project from question (e.g., question contains \"Bayview\") -> Use retrieval.requested_project\n// 4. We found project in top retrieved document -> Use retrieval.sources[0].project\n// 5. Nothing found -> Fallback to \"General\" for FAQ / rules docs\nconst explicitProject = body.filter?.project || body.project || null;\nconst autoDetectedProject = retrieval.requested_project || null;\nconst foundInDocs = retrieval.sources?.[0]?.project || null;\n\nconst finalProject = explicitProject || autoDetectedProject || foundInDocs || \"General\";\n// Examples:\n// Q: \"ما هي الدفعة الأولى؟\" + filter: Damac Hills 2 -> finalProject = \"Damac Hills 2\" (explicit)\n// Q: \"What is the Bayview payment schedule?\" (no filter) -> finalProject = \"Bayview\" (auto-detected from question)\n// Q: \"What is DLD fee?\" (no filter, no project in question) -> finalProject = \"General\" (from doc metadata)\n\n// STEP 4: Get Gemini answer\n// $json is from \"Generate Grounded Answer\" node (Gemini 2.5 Flash)\n// If Gemini failed or returned empty, show grounded fallback message\nconst answer =\n  $json.candidates?.[0]?.content?.parts?.[0]?.text ||\n  $input.first().json?.answer || // Fallback if skip_llm was true\n  \"I could not find this information in the uploaded documents.\";\n\n// STEP 5: Build final response object\n// This is what Postman, your frontend, and Supabase logging will receive\nreturn [{\n  json: {\n    // Original user question (keeps Arabic if Arabic was asked)\n    question: retrieval.question || body.question || \"\",\n\n    // Detected language: \"ar\" for Arabic, \"en\" for English\n    // Comes from Detect Question Language node via Build Retrieval Context\n    language: retrieval.language || \"en\",\n\n    // Final project - now always correct, even when user sends no filter\n    // Fixes your \"General\" bug in Supabase rag_logs_realestate table\n    project: finalProject,\n\n    // Final grounded answer from Gemini - ONLY using retrieved context\n    answer: answer,\n\n    // Source documents with citations - filtered to only relevant project\n    // No more Emaar docs when you ask for Damac\n    sources: retrieval.sources || [],\n\n    // ISO timestamp for logging and frontend display\n    timestamp: new Date().toISOString(),\n\n    // Debug fields (optional, useful for Day 6 observability)\n    // You can remove these before final publish if you want cleaner JSON\n    _debug: {\n      requested_filter: body.filter || {},\n      auto_detected: autoDetectedProject,\n      found_in_doc: foundInDocs\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        416
+      ],
+      "id": "ba505883-1c8c-493e-86fc-4aa1aee23c99",
+      "name": "Format API Response"
+    },
+    {
+      "parameters": {
+        "content": "# Enterprise RAG API\n\n## Day 4 - Retrieval\n\n### Stack\n\n• Gemini Embedding 2\n• Gemini 2.5 Flash\n• Supabase pgvector\n• Semantic Search\n• Grounded Answers",
+        "height": 320,
+        "width": 208,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -288,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "e5ce34a3-9a3f-40d2-8740-6a1df48ddadb",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "jsCode": "const embedding = $json.embedding;\nif (!embedding?.values || embedding.values.length!== 768) {\n throw new Error('Invalid embedding dimension. Expected 768, got ${embedding?.value?.length ?? 0}'\n);\n}\nreturn [{\n  json:{\n embedding_length: embedding.values.length,\n embedding: embedding.values,\n  },\n },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        416
+      ],
+      "id": "8a496d26-1c6a-4b3c-8e02-8b6dde797f22",
+      "name": "Validate Query Embedding"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// BUILD RETRIEVAL CONTEXT - Day 5 Production FIX\n// Auto-detects project from question when filter is empty\n// Handles English + Arabic questions\n// ============================================\n\nconst MIN_SIMILARITY = 0.50;\nconst webhookBody = $('Webhook').first().json.body || {};\nlet requestedProject = webhookBody.filter?.project || webhookBody.project || \"\";\n\n// STEP 2 FIX: Auto-detect project from question in BOTH English and Arabic\n// This fixes \"ما هو جدول الدفع لمشروع بايفيو؟\" when you send NO filter\nif (!requestedProject) {\n  const q = (webhookBody.question || \"\").toLowerCase();\n\n  // Bayview - English + Arabic variants (بايفيو، باي فيو، بايڤيو)\n  if (q.includes(\"bayview\") || q.includes(\"بايفيو\") || q.includes(\"باي فيو\") || q.includes(\"بايڤيو\") || q.includes(\"باي\") ) {\n    requestedProject = \"Bayview\";\n  }\n  // Damac Hills 2 - English + Arabic\n  else if (q.includes(\"damac hills 2\") || q.includes(\"damac hills2\") || q.includes(\"ضاحية داماك\") || q.includes(\"داماك هيلز 2\") || q.includes(\"داماك هيلز\") || q.includes(\"داماك\")) {\n    requestedProject = \"Damac Hills 2\";\n  }\n  // DLD / Fees - keep as General (these are general docs, not a project)\n  else if (q.includes(\"dld\") || q.includes(\"رسوم\") || q.includes(\"fee\")) {\n    requestedProject = \"General\";\n  }\n  // Add more projects here as you ingest them\n  // else if (q.includes(\"marina\")) requestedProject = \"Dubai Marina\";\n}\n\nlet docs = ($json.body || []).filter(doc => doc.similarity >= MIN_SIMILARITY);\n\n// STEP 3: Project Filtering - Now works even when filter is {}\nif (requestedProject) {\n  const matchingDocs = docs.filter(doc => {\n    const docProject = (doc.metadata?.project || \"\").toLowerCase();\n    return docProject === requestedProject.toLowerCase() || docProject.includes(requestedProject.toLowerCase());\n  });\n  if (matchingDocs.length > 0) {\n    docs = matchingDocs;\n  } else {\n    const titleMatch = docs.filter(d => d.title.toLowerCase().includes(requestedProject.toLowerCase()));\n    if (titleMatch.length > 0) docs = titleMatch;\n  }\n}\n\nif (docs.length === 0) {\n  return [{\n    json: {\n      question: webhookBody.question,\n      language: $('Detect Question Language').first().json.detected_language,\n      context: '',\n      sources: [],\n      skip_llm: true,\n      detected_project: requestedProject || \"General\"\n    }\n  }];\n}\n\n// Deduplication\nconst seen = new Set(); const uniqueDocs = [];\nfor (const doc of docs) {\n  const uniqueKey = `${doc.doc_id}`;\n  if (!seen.has(uniqueKey)) { seen.add(uniqueKey); uniqueDocs.push(doc); }\n}\n\n// Diversity Limit - Max 2 chunks per doc\nconst MAX_CHUNKS_PER_DOCUMENT = 2;\nconst documentCounts = {}; const balancedDocs = [];\nfor (const doc of uniqueDocs) {\n  const docId = doc.doc_id;\n  if (!documentCounts[docId]) documentCounts[docId] = 0;\n  if (documentCounts[docId] >= MAX_CHUNKS_PER_DOCUMENT) continue;\n  documentCounts[docId]++; balancedDocs.push(doc);\n}\n\n// Re-sort by similarity AFTER filtering\nbalancedDocs.sort((a,b) => b.similarity - a.similarity);\n\nconst context = balancedDocs.map((doc, i) => {\n  const m = doc.metadata||{};\n  return `DOCUMENT ${i+1}\\nTitle: ${doc.title}\\nProject: ${m.project}\\n${doc.content}`;\n}).join(\"\\n---\\n\");\n\nreturn [{\n  json: {\n    question: webhookBody.question,\n    language: $('Detect Question Language').first().json.detected_language,\n    requested_project: requestedProject || \"General\",\n    context,\n    sources: balancedDocs.map(d => ({\n      title: d.title,\n      developer: d.metadata?.developer,\n      project: d.metadata?.project,\n      community: d.metadata?.community,\n      document_type: d.metadata?.document_type,\n      similarity: d.similarity\n    })),\n    skip_llm: false\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        416
+      ],
+      "id": "f862b9de-e7c3-4792-bcab-eb10698cb5c7",
+      "name": "Build Retrieval Context"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": "={\n  \"answer\": \"{{$json.answer}}\",\n  \"sources\": \"{{$json.sources}}\",\n  \"language\": \"{{$json.language}}\",\n  \"project\": \"{{$json.project}}\"\n}"
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2016,
+        320
+      ],
+      "id": "b31d4c68-9057-40ee-a307-e63d0235b89d",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    webhook: $('Webhook').first().json.body,\n    filter: (() => {\n      const body = $('Webhook').first().json.body;\n\n      const filter = {};\n\n      if (body.project) filter.project = body.project;\n      if (body.developer) filter.developer = body.developer;\n      if (body.community) filter.community = body.community;\n      if (body.document_type) filter.document_type = body.document_type;\n\n      return filter;\n    })()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        416
+      ],
+      "id": "954c8c0a-1553-4d3c-95b8-d59fdcc5c722",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const question = $json.body.question || \"\";\n\nconst isArabic = /[\\u0600-\\u06FF]/.test(question);\n\nreturn [{\n  json: {\n    ...$json,\n    detected_language: isArabic ? \"ar\" : \"en\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        416
+      ],
+      "id": "a355f700-b7e4-463a-93ae-3b3b2d086d58",
+      "name": "Detect Question Language"
+    },
+    {
+      "parameters": {
+        "tableId": "rag_logs_realestate",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "question",
+              "fieldValue": "={{ $json.question }}"
+            },
+            {
+              "fieldId": "language",
+              "fieldValue": "={{ $json.language }}"
+            },
+            {
+              "fieldId": "project",
+              "fieldValue": "={{ $json.project }}"
+            },
+            {
+              "fieldId": "answer",
+              "fieldValue": "={{ $json.answer }}"
+            },
+            {
+              "fieldId": "answered",
+              "fieldValue": "={{ $json.answer !== \"I could not find this information in the uploaded documents.\" }}"
+            },
+            {
+              "fieldId": "top_similarity",
+              "fieldValue": "={{ $json.sources?.[0]?.similarity ?? null }}"
+            },
+            {
+              "fieldId": "source_count",
+              "fieldValue": "={{ $json.sources?.length ?? 0 }}"
+            },
+            {
+              "fieldId": "sources",
+              "fieldValue": "={{ JSON.stringify($json.sources) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        512
+      ],
+      "id": "5ec5fd48-d7cd-4600-a9a5-caaef97d2933",
+      "name": "Insert Log (Supabase)",
+      "credentials": {
+        "supabaseApi": {
+          "id": "uTK204BB91XD7iWO",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Receives POST\n\n## Input\n\nquestion\n\n## Returns\n\nGrounded answer",
+        "height": 320,
+        "width": 208,
+        "color": "#FFFFFF"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        32,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "44aeacb3-504a-4bd7-b1a2-af1658867173",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "# Query Embedding\n\n## Gemini Embedding 2\n\n• Multilingual\n• Retrieval vectors",
+        "height": 320,
+        "width": 208,
+        "color": "#2F0D68"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        352,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "03c012ee-ded4-4647-8077-791a05edd55e",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Semantic Search\n\n## Top-K similarity\n\nReturns\nrelevant chunks",
+        "height": 320,
+        "width": 208,
+        "color": "#032E15"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        672,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "dbeb140e-f295-4ab2-ac60-ab3b19580407",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Grounded Generation\n\nGemini 2.5 Flash\n\nAnswers ONLY using\n\nretrieved context.",
+        "height": 320,
+        "width": 208,
+        "color": "#032E15"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1008,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "91648e02-069b-471b-a308-64fd56833d87",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "# API Response\n\n## Returns\n\n✓ answer\n✓ sources\n✓ language\n✓ timestamp",
+        "height": 320,
+        "width": 208,
+        "color": "#032E15"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1344,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "8f3ef511-d18a-496e-8cd7-ca31e974324c",
+      "name": "Sticky Note4"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Detect Question Language",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Query Embedding": {
+      "main": [
+        [
+          {
+            "node": "Validate Query Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Similar Chunks": {
+      "main": [
+        [
+          {
+            "node": "Build Retrieval Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Grounded Answer": {
+      "main": [
+        [
+          {
+            "node": "Format API Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Query Embedding": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Retrieval Context": {
+      "main": [
+        [
+          {
+            "node": "Generate Grounded Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format API Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insert Log (Supabase)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Retrieve Similar Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Question Language": {
+      "main": [
+        [
+          {
+            "node": "Generate Query Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "29466e7b-47ae-47e7-9585-9ecd216d6b13",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "65009f894cb80909d7d8d00a009243cc2121ce7f274390314aab1db0f3eb5fdb"
+  },
+  "nodeGroups": [],
+  "id": "8eZwiTRzyHYvisrF",
+  "tags": []
+}

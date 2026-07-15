@@ -1,0 +1,541 @@
+{
+  "name": "01 - Real Estate Ingestion - PDF + OCR + Gemini Embeddings",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "9655a98e-39b2-4334-9ae1-94aa005c420d",
+        "authentication": "headerAuth",
+        "options": {
+          "binaryPropertyName": "data"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1088,
+        464
+      ],
+      "id": "49e5ac0c-685c-4d1b-96fb-14fc9bdeac7a",
+      "name": "Webhook",
+      "webhookId": "9655a98e-39b2-4334-9ae1-94aa005c420d",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "DXs2yQA5l1AZT0mH",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "rag_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "event_type",
+              "fieldValue": "ingestion_error"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "failed"
+            },
+            {
+              "fieldId": "details",
+              "fieldValue": "={{\nJSON.stringify($json)\n}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        256,
+        592
+      ],
+      "id": "14aec2ea-ddb9-496b-936c-3123bddec801",
+      "name": "Supabase(Log Error)",
+      "credentials": {
+        "supabaseApi": {
+          "id": "uTK204BB91XD7iWO",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "# Error Handling\n\n• Retry failures\n• Log errors\n• Continue workflow",
+        "height": 192,
+        "width": 182,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        128,
+        784
+      ],
+      "id": "18cca1e3-0acb-43a5-9822-c833982fb970",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Enterprise RAG API\n\nDay 3 - Document Ingestion\n\n# Stack\n\n• n8n 2.28.7 (Docker)\n• Gemini Embedding 2\n• Supabase pgvector\n• English / Arabic\n• Production Logging",
+        "height": 304,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1328,
+        -96
+      ],
+      "id": "c118c29e-5ae5-44ad-b436-ef5b29e95103",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $json.text || \"\";\n\nif (!text) {\n  throw new Error(\"No text provided.\");\n}\n\nif (!$json.body?.doc_id) {\n  throw new Error(\"No doc_id provided.\");\n}\n\nconst docId = $json.body.doc_id;\nconst title = $json.body.title || \"\";\nconst developer = $json.body.developer || \"\";\nconst project = $json.body.project || \"\";\nconst community = $json.body.community || \"\";\nconst documentType = $json.body.document_type || \"\";\nconst year = $json.body.year || \"\";\n\nconst CHUNK_SIZE = 1000;\nconst CHUNK_OVERLAP = 200;\n\nconst isArabic = /[\\u0600-\\u06FF]/.test(text);\n\nconst chunks = [];\nlet chunkId = 1;\n\nfor (let i = 0; i < text.length; i += CHUNK_SIZE - CHUNK_OVERLAP) {\n\n  let end = Math.min(i + CHUNK_SIZE, text.length);\n\n  // Don't search if this is the last chunk\n  if (end < text.length) {\n\n    // Look back up to 200 characters for a better place to split\n    const searchStart = Math.max(i, end - 200);\n    const searchText = text.slice(searchStart, end);\n\n    // Prefer paragraph break\n    let split = searchText.lastIndexOf(\"\\n\\n\");\n\n    // Otherwise line break\n    if (split === -1) split = searchText.lastIndexOf(\"\\n\");\n\n    // Otherwise sentence end\n    if (split === -1) split = searchText.lastIndexOf(\".\");\n\n    // Otherwise space\n    if (split === -1) split = searchText.lastIndexOf(\" \");\n\n    // Found a better boundary\n    if (split > 0) {\n      end = searchStart + split;\n    }\n  }\n\n  const chunkText = text.slice(i, end).trim();\n\n  // Skip tiny chunks only if they are NOT the final chunk\n  if (chunkText.length < 200 && end < text.length) {\n    continue;\n  }\n\n  const chunkData = {\n    json: {\n      doc_id: docId,\n      chunk_id: chunkId++,\n      title,\n      developer,\n      project,\n      community,\n      document_type: documentType,\n      year,\n      chunk: chunkText,\n      language: isArabic ? \"ar\" : \"en\",\n      supported_languages: [\"en\", \"ar\"]\n    }\n  };\n\n  chunks.push(chunkData);\n\n  // Stop after saving the final chunk\n  if (end >= text.length) {\n    break;\n  }\n}\n\nreturn chunks;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        464
+      ],
+      "id": "950e2dd7-e5be-4b1e-9dcb-17002ecda699",
+      "name": "Chunk Document"
+    },
+    {
+      "parameters": {
+        "useCustomSchema": true,
+        "tableId": "documents",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "doc_id",
+              "fieldValue": "={{ $json.doc_id }}"
+            },
+            {
+              "fieldId": "chunk_id",
+              "fieldValue": "={{ $json.chunk_id }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $json.title }}"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $json.chunk }}"
+            },
+            {
+              "fieldId": "language",
+              "fieldValue": "={{ $json.language }}"
+            },
+            {
+              "fieldId": "supported_languages",
+              "fieldValue": "={{ $json.supported_languages }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ \n{   \n  source: $json.title,\n  developer: $json.developer,\n  project: $json.project,\n  community: $json.community,\n  document_type: $json.document_type,\n  year: Number($json.year),\n\n  language: $json.language,\n\n  chunk_size: 1000,\n  overlap: 200,\n\n  ingested_by: \"n8n\",\n  pipeline: \"Dubai Real Estate RAG V1\"\n} \n}}"
+            },
+            {
+              "fieldId": "embedding",
+              "fieldValue": "={{ $json.embedding.values }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        480,
+        464
+      ],
+      "id": "f05ffc20-2e27-4b8e-9c10-d29f30348dac",
+      "name": "Store Vector in Supabase",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "uTK204BB91XD7iWO",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "rag_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "event_type",
+              "fieldValue": "ingestion"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "success"
+            },
+            {
+              "fieldId": "details",
+              "fieldValue": "={{\nJSON.stringify({\n  doc_id: $json.doc_id,\n  chunk_id: $json.chunk_id,\n  title: $json.title,\n  language: $json.language,\n  status: \"stored\"\n})\n}}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        704,
+        464
+      ],
+      "id": "2c336c88-f6e3-406d-80f1-75b4e6fea4e9",
+      "name": "Log Success",
+      "credentials": {
+        "supabaseApi": {
+          "id": "uTK204BB91XD7iWO",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Number of processed chunks\nconst chunksProcessed = $input.all().length;\n\n// Get the original request from the Webhook node\nconst originalRequest = $('Webhook').first().json.body;\n\nreturn [\n  {\n    json: {\n      success: true,\n      doc_id: originalRequest.doc_id,\n      title: originalRequest.title,\n      chunks_processed: chunksProcessed,\n      message: \"Document ingested successfully.\",\n      timestamp: new Date().toISOString()\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        464
+      ],
+      "id": "3100b955-69b0-4c69-8320-8164cabda4df",
+      "name": "Format Success Response"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data0",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -864,
+        544
+      ],
+      "id": "8d4c807e-a230-4386-86ff-ca44a95d1c8e",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nlet text = item.json.text || \"\";\n\nconst documentType = ($json.body?.document_type || \"\")\n  .trim()\n  .toLowerCase();\n\n// Normalize line endings\ntext = text.replace(/\\r\\n/g, \"\\n\");\n\n// Remove URLs\ntext = text.replace(/https?:\\/\\/\\S+|www\\.\\S+/gi, \"\");\n\n\n// Remove lines made only of OCR symbols\ntext = text.replace(/^[\\s|._-]+$/gm, \"\");\n\n// Remove lines containing only pipes\ntext = text.replace(/^\\s*\\|\\s*$/gm, \"\");\n\n// Remove lines containing only dots\ntext = text.replace(/^\\s*\\.{2,}\\s*$/gm, \"\");\n\n// Collapse multiple blank lines\ntext = text.replace(/\\n{3,}/g, \"\\n\\n\");\n\n// Collapse multiple spaces\ntext = text.replace(/[ \\t]{2,}/g, \" \");\n\n// Remove trailing spaces on each line\ntext = text.replace(/[ \\t]+$/gm, \"\");\n\n// Trim\ntext = text.trim();\n\n// ---------- Document-specific cleaning ----------\nif (documentType === \"payment plan\") {\n\n  // Remove email addresses\n  text = text.replace(/\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/gi, \"\");\n\n  // Remove UAE phone numbers\n  text = text.replace(/(\\+971[\\s-]?\\d[\\d\\s-]{7,}|0\\d[\\d\\s-]{7,})/g, \"\");\n\n  // Remove marketing labels\n  text = text.replace(\n    /\\b(CONTACT US|FOR MORE INFO|VISIT WEBSITE|EMAIL US|ADDRESS)\\b:?/gi,\n    \"\"\n  );\n\n}\n// Save cleaned text for EVERY document\nitem.json.text = text;\nreturn [item];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        464
+      ],
+      "id": "c1b2989b-ef54-4e95-a80c-ff06a65ade21",
+      "name": "Clean OCR Text"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1/models/gemini-embedding-2:embedContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ {   model: \"models/gemini-embedding-2\",   content: {     parts: [       {         text: $json.chunk       }     ]   },   taskType: \"RETRIEVAL_DOCUMENT\",   outputDimensionality: 768 } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        32,
+        544
+      ],
+      "id": "7fbd89fe-5b20-49b7-8ee3-99d98ea4731e",
+      "name": "Embed Document",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "V7LLvidI6N7DOpcZ",
+          "name": "Gemini Toqeer Prod"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -640,
+        464
+      ],
+      "id": "257979e7-ca8f-4675-b520-3624a88e4444",
+      "name": "Merge PDF + Metadata"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {
+          "clashHandling": {
+            "values": {
+              "resolveClash": "preferLast",
+              "overrideEmpty": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        256,
+        368
+      ],
+      "id": "a95c204b-78bf-4a9e-9bc7-14558b4c4d84",
+      "name": "Merge Chunk + Vector"
+    },
+    {
+      "parameters": {
+        "content": "# Chunk Strategy\n\nChunk Size : 1000\nOverlap : 200\n\n## Optimized for\nsemantic retrieval.",
+        "height": 304,
+        "color": "#FFAE00"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        -96
+      ],
+      "id": "96231ad3-af02-4ac9-97bd-fcd3c2b47deb",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# Embedding Model\n\n## Gemini Embedding 2\n\n• 768-d vectors\n• Multilingual\n• Retrieval optimized",
+        "height": 304,
+        "color": "#1C398E"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -624,
+        -96
+      ],
+      "id": "867f6c26-e150-4334-a9ce-9830ed616a86",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "# Vector Database\n\n**Supabase PostgreSQL**\n\n• pgvector\n• HNSW\n• Metadata\n• Audit logs",
+        "height": 304,
+        "color": "#032E15"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        -96
+      ],
+      "id": "a3e7c775-1536-4b58-8a55-6a5e23fb9fe4",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "# API Response\n\n## Returns\n\n✓ doc_id\n✓ chunks_processed\n✓ timestamp",
+        "height": 304,
+        "color": "#032E15"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -96
+      ],
+      "id": "9f5561e0-b069-4cf6-bf74-d68e9b54e656",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "content": "## Logs successful ingestions  \n**rag_logs** for audit trail.",
+        "height": 192,
+        "width": 182,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        416,
+        784
+      ],
+      "id": "4eed79d3-ace5-4973-9085-0bfba8762b3d",
+      "name": "Sticky Note7"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Merge PDF + Metadata",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase(Log Error)": {
+      "main": [
+        [
+          {
+            "node": "Store Vector in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chunk Document": {
+      "main": [
+        [
+          {
+            "node": "Embed Document",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Chunk + Vector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Vector in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Success": {
+      "main": [
+        [
+          {
+            "node": "Format Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Merge PDF + Metadata",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Clean OCR Text": {
+      "main": [
+        [
+          {
+            "node": "Chunk Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Document": {
+      "main": [
+        [
+          {
+            "node": "Merge Chunk + Vector",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Supabase(Log Error)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge PDF + Metadata": {
+      "main": [
+        [
+          {
+            "node": "Clean OCR Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Chunk + Vector": {
+      "main": [
+        [
+          {
+            "node": "Store Vector in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c1205fcd-01f4-49aa-ab2b-b50fd7b630af",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "65009f894cb80909d7d8d00a009243cc2121ce7f274390314aab1db0f3eb5fdb"
+  },
+  "nodeGroups": [],
+  "id": "EKzhKgkad9wtBLK7",
+  "tags": []
+}
