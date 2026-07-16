@@ -24,51 +24,28 @@ A production-ready **Retrieval-Augmented Generation (RAG)** API built with **n8n
 
 ---
 
-# 🏗️ Architecture
 
-```text
-                PDF Upload
-                     │
-                     ▼
-          Extract Text From PDF
-                     │
-                     ▼
-             OCR Cleaning
-                     │
-                     ▼
-          Chunk Documents (1000 / 200)
-                     │
-                     ▼
-      Gemini Embedding 2 (768)
-                     │
-                     ▼
-         Supabase pgvector Database
-                     │
-────────────────────────────────────────────
-                     │
-              User Question
-                     │
-                     ▼
-           Detect Language (EN / AR)
-                     │
-                     ▼
-      Gemini Query Embedding
-                     │
-                     ▼
-      Metadata-Aware Vector Search
-                     │
-                     ▼
-        Build Retrieval Context
-                     │
-                     ▼
-         Gemini 2.5 Flash
-                     │
-                     ▼
-        Grounded Final Answer
-                     │
-                     ▼
-      Log Query + Retrieval Metrics
+# 🏗 Architecture
+
+<p align="center">
+  <img src="docs/architecture.jpeg" alt="Enterprise Bilingual RAG Architecture" width="100%" />
+
+
+<details>
+<summary>📄 View Mermaid Source</summary>
+
+```mermaid
+flowchart TD
+    A[PDF Upload] --> B[Extract Text From PDF] --> C[OCR Cleaning] --> D[Chunk Documents<br/>1000 / 200] --> E[Gemini Embedding 2<br/>768] --> F[(Supabase pgvector Database)]
+    F --- G[User Question]
+    G --> H[Detect Language<br/>EN / AR] --> I[Gemini Query Embedding] --> J[Metadata-Aware Vector Search] --> K[Build Retrieval Context] --> L[Gemini 2.5 Flash] --> M[Grounded Final Answer] --> N[Log Query + Retrieval Metrics]
+
+    style F fill:#1a1a2e,stroke:#3b82f6,stroke-width:2px
+    style J fill:#1e3a5f,stroke:#3b82f6,stroke-width:2px
 ```
+</p>
+
+---
 
 # 📸 Screenshots
 
